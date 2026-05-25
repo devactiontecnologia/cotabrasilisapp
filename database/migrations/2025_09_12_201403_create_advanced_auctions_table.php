@@ -15,8 +15,8 @@ return new class extends Migration
             $table->id();
             $table->foreignId('rental_offer_id')->constrained()->onDelete('cascade');
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->dateTime('start_time');
-            $table->dateTime('end_time');
+            $table->timestamp('start_time'); // Data/hora de início
+            $table->timestamp('end_time'); // Data/hora de fim
             $table->decimal('minimum_price', 10, 2); // Preço mínimo
             $table->integer('duration_minutes'); // Duração em minutos (20-1440)
             $table->integer('bid_extension_minutes')->default(1); // Minutos antes do fim para permitir lances

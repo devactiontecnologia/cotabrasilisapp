@@ -50,7 +50,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('educational_video_id')->constrained()->onDelete('cascade');
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->dateTime('viewed_at');
+            $table->timestamp('viewed_at');
             $table->integer('duration_watched')->default(0); // em segundos
             $table->boolean('completed')->default(false);
             $table->timestamps();

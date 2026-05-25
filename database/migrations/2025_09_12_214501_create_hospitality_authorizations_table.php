@@ -28,7 +28,7 @@ return new class extends Migration
             $table->enum('status', ['pending', 'approved', 'rejected', 'used', 'expired'])->default('pending');
             $table->timestamp('approved_at')->nullable();
             $table->timestamp('used_at')->nullable();
-            $table->dateTime('expires_at');
+            $table->timestamp('expires_at');
             $table->text('rejection_reason')->nullable();
             $table->text('hotel_notes')->nullable();
             $table->boolean('is_transferable')->default(false);
