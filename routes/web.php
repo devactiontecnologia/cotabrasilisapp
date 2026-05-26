@@ -26,6 +26,7 @@ use App\Http\Controllers\HotelOptionsController;
 use App\Http\Controllers\BoraLaController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\AsaasWebhookController;
+use App\Http\Controllers\AsaasWalletController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AdminEducationalHubController;
 use App\Http\Controllers\AdminEducationalContentController;
@@ -120,6 +121,12 @@ Route::middleware(['auth', 'valid.registration'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard/approval-status', [DashboardController::class, 'approvalStatus'])->name('dashboard.approval-status');
     Route::post('/dashboard/clear-approval-modal', [DashboardController::class, 'clearApprovalModal'])->name('dashboard.clear-approval-modal');
+
+    // Carteira digital Asaas (subconta)
+    Route::get('/carteira/transferencia', [AsaasWalletController::class, 'showTransferForm'])->name('wallet.transfer.form');
+    Route::post('/carteira/transferencia', [AsaasWalletController::class, 'storeTransfer'])->name('wallet.transfer.store');
+    Route::get('/carteira/transferencia/{transfer}/processando', [AsaasWalletController::class, 'processing'])->name('wallet.transfer.processing');
+    Route::get('/carteira/transferencia/{transfer}/confirmacao', [AsaasWalletController::class, 'confirmation'])->name('wallet.transfer.confirmation');
 
     // Interesses e negociações em andamento (proprietário e interessado); fora de profile.complete para acesso amplo
     Route::get('/transactions/owner-pending', [TransactionController::class, 'ownerPending'])->name('transactions.owner-pending');

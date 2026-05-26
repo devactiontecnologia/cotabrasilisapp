@@ -12,9 +12,13 @@ use App\Models\DigitalContract;
 use App\Models\Hotel;
 use App\Models\RentalOffer;
 use App\Services\EmailService;
+use App\Services\Asaas\AsaasSubaccountService;
 
 class TransactionController extends Controller
 {
+    public function __construct(
+        protected AsaasSubaccountService $asaasSubaccountService
+    ) {}
     /**
      * Display a listing of transactions.
      */
@@ -156,6 +160,8 @@ class TransactionController extends Controller
             'is_completed' => false,
         ]);
 
+        $this->provisionAsaasSubaccount($user, $transaction);
+
         return redirect()->route('transactions.waiting-document', $transaction)
             ->with('success', 'Interesse registrado! Aguarde o proprietário enviar o documento em até 60 horas.');
     }
@@ -227,6 +233,8 @@ class TransactionController extends Controller
             'contract_content' => $this->generateRentalContract($transaction),
             'is_completed' => false,
         ]);
+
+        $this->provisionAsaasSubaccount($user, $transaction);
 
         return redirect()->route('transactions.waiting-document', $transaction)
             ->with('success', 'Interesse registrado! Aguarde o proprietário enviar o documento em até 60 horas.');
@@ -340,6 +348,8 @@ class TransactionController extends Controller
             'contract_content' => $this->generateExchangeContract($transaction, $exchangeQuota),
             'is_completed' => false,
         ]);
+
+        $this->provisionAsaasSubaccount($user, $transaction);
 
         return redirect()->route('transactions.show', $transaction)
             ->with('success', 'Solicitação de troca criada com sucesso!');
@@ -864,6 +874,22 @@ class TransactionController extends Controller
                 'status' => Quota::STATUS_AVAILABLE,
                 'negotiation_deadline' => null,
                 'current_transaction_id' => null,
+            ]);
+        }
+    }
+
+    /**
+     * Cria ou reativa subconta Asaas do cotista ao iniciar negociação.
+     */
+    private function provisionAsaasSubaccount($user, QuotaTransaction $transaction): void
+    {
+        try {
+            $this->asaasSubaccountService->ensureForUser($user, $transaction);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Asaas: erro ao provisionar subconta', [
+                'user_id' => $user->id,
+                'transaction_id' => $transaction->id,
+                'message' => $e->getMessage(),
             ]);
         }
     }
