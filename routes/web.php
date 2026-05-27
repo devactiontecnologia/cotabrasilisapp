@@ -208,6 +208,7 @@ Route::middleware(['auth', 'valid.registration'])->group(function () {
 
         // Exchange routes (Trocar)
         Route::get('/exchanges', [ExchangeController::class, 'index'])->name('exchanges.index');
+        Route::get('/exchanges/refine', [ExchangeController::class, 'refine'])->name('exchanges.refine');
         Route::get('/exchanges/create', [ExchangeController::class, 'create'])->name('exchanges.create');
         Route::post('/exchanges', [ExchangeController::class, 'store'])->name('exchanges.store');
         Route::get('/exchanges/{exchangeOffer}', [ExchangeController::class, 'show'])->name('exchanges.show');
@@ -227,6 +228,7 @@ Route::middleware(['auth', 'valid.registration'])->group(function () {
 
         // Purchase routes (Comprar)
         Route::get('/purchases', [PurchaseController::class, 'index'])->name('purchases.index');
+        Route::get('/purchases/refine', [PurchaseController::class, 'refine'])->name('purchases.refine');
         Route::get('/purchases/create', [PurchaseController::class, 'create'])->name('purchases.create');
         Route::post('/purchases', [PurchaseController::class, 'store'])->name('purchases.store');
         Route::get('/purchases/{purchaseRequest}', [PurchaseController::class, 'show'])->name('purchases.show');

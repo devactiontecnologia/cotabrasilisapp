@@ -189,6 +189,19 @@ class Quota extends Model
         });
     }
 
+    public function scopeWhereFractionPeriodAction(Builder $query, string $action): Builder
+    {
+        $action = trim($action);
+
+        return $query->whereNotNull('fraction_details')
+            ->where(function (Builder $q) use ($action) {
+                $q->where('fraction_details', 'like', '%"action":"' . $action . '"%')
+                    ->orWhere('fraction_details', 'like', '%"action": "' . $action . '"%')
+                    ->orWhere('fraction_details', 'like', "%'action':'" . $action . "'%")
+                    ->orWhere('fraction_details', 'like', "%'action': '" . $action . "'%");
+            });
+    }
+
     /**
      * Preço exibido em listagens conforme tipo de transação (oferta de aluguel / troca / venda).
      */
@@ -417,7 +430,7 @@ class Quota extends Model
     public static function isPeriodEnabledWithAction(array $period): bool
     {
         $action = trim((string) ($period['action'] ?? ''));
-        $validActions = ['rent', 'exchange', 'rent_exchange'];
+        $validActions = ['rent', 'exchange', 'rent_exchange', 'sell'];
         if (!\in_array($action, $validActions, true)) {
             return false;
         }

@@ -44,6 +44,20 @@ class ExchangeController extends Controller
         return view('exchanges.index', compact('exchanges'));
     }
 
+    /**
+     * Refine search page for requesting exchanges (fractions only).
+     * This reuses the quotas search UI but forces "exchange" mode and
+     * restricts results to fractioned quotas whose fraction_details contain action=exchange.
+     */
+    public function refine(Request $request)
+    {
+        return redirect()->route('quotas.index', array_merge($request->all(), [
+            'transaction_type' => 'exchange',
+            'exchange_refine' => 1,
+            'search' => $request->input('search', 1),
+        ]));
+    }
+
     public function create()
     {
         $user = Auth::user();

@@ -56,7 +56,7 @@ class TransactionController extends Controller
     public function startNegotiation(Request $request, Quota $quota)
     {
         $user = Auth::user();
-        $transactionType = $request->get('type', 'rent'); // 'rent' or 'buy'
+        $transactionType = $request->get('type', 'rent'); // rent, buy, exchange
         
         // Check if user can rent/buy
         if ($quota->user_id === $user->id) {
@@ -69,7 +69,7 @@ class TransactionController extends Controller
                 ->with('error', 'Esta cota não está mais disponível.');
         }
 
-        // Block rental if linked hotel is not functioning
+        // Block rental/exchange if linked hotel is not functioning
         $hotel = null;
         if (!empty($quota->hotel_id)) {
             $hotel = Hotel::find($quota->hotel_id);
@@ -77,11 +77,22 @@ class TransactionController extends Controller
         if (!$hotel && !empty($quota->hotel_name)) {
             $hotel = Hotel::where('name', $quota->hotel_name)->first();
         }
-        if ($hotel && !$hotel->is_functioning) {
-            return redirect()->back()->with('error', 'Hotel inoperante: aluguel indisponível.');
+        if ($hotel && !$hotel->is_functioning && $transactionType !== 'buy') {
+            return redirect()->back()->with('error', 'Hotel inoperante: aluguel/troca indisponível.');
         }
 
-        return view('transactions.start-negotiation', compact('quota', 'transactionType'));
+        // For exchanges, preload user's available quotas (to offer as counterpart)
+        $myQuotas = collect();
+        if ($transactionType === 'exchange') {
+            $myQuotas = $user->quotas()
+                ->where(function ($q) {
+                    $q->where('status', Quota::STATUS_AVAILABLE)->orWhereNull('status');
+                })
+                ->orderBy('created_at', 'desc')
+                ->get();
+        }
+
+        return view('transactions.start-negotiation', compact('quota', 'transactionType', 'myQuotas'));
     }
 
     /**
@@ -270,9 +281,20 @@ class TransactionController extends Controller
                 ->with('error', 'Você não pode trocar sua própria cota.');
         }
 
-        if ($quota->status !== Quota::STATUS_AVAILABLE) {
+        if ($quota->status !== Quota::STATUS_AVAILABLE && $quota->status !== Quota::STATUS_NEGOTIATING) {
             return redirect()->back()
                 ->with('error', 'Esta cota não está mais disponível.');
+        }
+
+        // Se já está em negociação, verificar se é a mesma pessoa
+        if ($quota->status === Quota::STATUS_NEGOTIATING) {
+            if ($quota->current_transaction_id) {
+                $currentTransaction = QuotaTransaction::find($quota->current_transaction_id);
+                if ($currentTransaction && $currentTransaction->renter_id !== $user->id) {
+                    return redirect()->back()
+                        ->with('error', 'Esta cota já está em negociação com outro usuário.');
+                }
+            }
         }
 
         // If hotel not functioning, permitir apenas troca de titularidade (não troca de hospedagem)
@@ -290,6 +312,7 @@ class TransactionController extends Controller
         // Validate request
         $validator = Validator::make($request->all(), [
             'exchange_quota_id' => 'required|exists:quotas,id',
+            'is_fair_exchange' => 'nullable|boolean',
         ], [
             'exchange_quota_id.required' => 'Selecione uma cota para troca.',
             'exchange_quota_id.exists' => 'Cota selecionada não existe.',
@@ -314,24 +337,48 @@ class TransactionController extends Controller
                 ->with('error', 'Sua cota para troca não está disponível.');
         }
 
-        // Create transaction
+        $isFairExchange = $request->boolean('is_fair_exchange');
+
+        // Prazo de 60h para o proprietário enviar o documento
+        $documentDeadlineHours = 60;
+        $negotiationDeadline = now()->addHours($documentDeadlineHours);
+
+        // Taxa de êxito: só quando for troca justa
+        $platformFee = $isFairExchange ? 1.00 : 0.00; // placeholder; será exibido como taxa (sem valor de hospedagem)
+
+        // Create transaction (workflow similar ao aluguel; sem pagamento de valor da hospedagem)
         $transaction = QuotaTransaction::create([
             'quota_id' => $quota->id,
+            'exchange_quota_id' => $exchangeQuota->id,
             'renter_id' => $user->id,
             'owner_id' => $quota->user_id,
             'transaction_type' => 'exchange',
             'total_amount' => 0,
             'owner_amount' => 0,
-            'platform_fee' => 0,
-            'status' => 'pending',
-            'payment_method' => 'exchange',
-            'payment_status' => 'completed',
+            'platform_fee' => $platformFee,
+            'status' => QuotaTransaction::STATUS_NEGOTIATING,
+            'payment_status' => $isFairExchange ? QuotaTransaction::PAYMENT_PENDING : QuotaTransaction::PAYMENT_COMPLETED,
             'transaction_date' => now(),
+            'negotiation_started_at' => now(),
+            'negotiation_deadline' => $negotiationDeadline,
+            'document_upload_deadline' => now()->addHours($documentDeadlineHours),
+            'payment_deadline_hours' => 24,
+            'document_deadline_hours' => $documentDeadlineHours,
+            'workflow_step' => QuotaTransaction::WORKFLOW_AWAITING_OWNER_DOC,
+            'is_fair_exchange' => $isFairExchange,
         ]);
 
-        // Update quota statuses
-        $quota->update(['status' => Quota::STATUS_RENTED]);
-        $exchangeQuota->update(['status' => Quota::STATUS_RENTED]);
+        // Update quota statuses (ambas entram em negociação)
+        $quota->update([
+            'status' => Quota::STATUS_NEGOTIATING,
+            'negotiation_deadline' => $negotiationDeadline,
+            'current_transaction_id' => $transaction->id,
+        ]);
+        $exchangeQuota->update([
+            'status' => Quota::STATUS_NEGOTIATING,
+            'negotiation_deadline' => $negotiationDeadline,
+            'current_transaction_id' => $transaction->id,
+        ]);
 
         // Create digital contract
         DigitalContract::create([
@@ -341,8 +388,8 @@ class TransactionController extends Controller
             'is_completed' => false,
         ]);
 
-        return redirect()->route('transactions.show', $transaction)
-            ->with('success', 'Solicitação de troca criada com sucesso!');
+        return redirect()->route('transactions.waiting-document', $transaction)
+            ->with('success', 'Interesse de troca registrado! Aguarde o proprietário enviar o documento em até 60 horas.');
     }
 
     /**
@@ -542,15 +589,18 @@ class TransactionController extends Controller
         if ($transaction->owner_id !== $user->id) {
             return redirect()->route('transactions.index')->with('error', 'Acesso negado.');
         }
-        $request->validate([
-            'owner_pix' => 'required|string|max:255',
+        $rules = [
             'document' => 'required|file|mimes:pdf,jpg,jpeg,png',
-        ], [
-            'owner_pix.required' => 'Informe seu PIX para receber o valor do aluguel.',
-        ]);
+        ];
+        $messages = [];
+        if ($transaction->transaction_type === QuotaTransaction::TYPE_RENTAL) {
+            $rules['owner_pix'] = 'required|string|max:255';
+            $messages['owner_pix.required'] = 'Informe seu PIX para receber o valor do aluguel.';
+        }
+        $request->validate($rules, $messages);
         $path = $request->file('document')->store('transaction-documents', 'public');
         $transaction->update([
-            'owner_pix' => trim($request->input('owner_pix')),
+            'owner_pix' => $transaction->transaction_type === QuotaTransaction::TYPE_RENTAL ? trim((string) $request->input('owner_pix')) : null,
             'document_path' => $path,
             'document_uploaded_at' => now(),
             'workflow_step' => QuotaTransaction::WORKFLOW_DOC_AVAILABLE,
@@ -567,14 +617,19 @@ class TransactionController extends Controller
         if ($transaction->renter_id !== $user->id) {
             return redirect()->route('transactions.index')->with('error', 'Acesso negado.');
         }
-        $request->validate([
+        $rules = [
             'document' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            'payment_receipt' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
-        ], [
-            'payment_receipt.required' => 'Anexe o comprovante de pagamento do valor do aluguel (PIX ao proprietário).',
-        ]);
+        ];
+        $messages = [];
+        if ($transaction->transaction_type === QuotaTransaction::TYPE_RENTAL) {
+            $rules['payment_receipt'] = 'required|file|mimes:pdf,jpg,jpeg,png|max:5120';
+            $messages['payment_receipt.required'] = 'Anexe o comprovante de pagamento do valor do aluguel (PIX ao proprietário).';
+        }
+        $request->validate($rules, $messages);
         $docPath = $request->file('document')->store('transaction-documents', 'public');
-        $receiptPath = $request->file('payment_receipt')->store('transaction-documents', 'public');
+        $receiptPath = $request->hasFile('payment_receipt')
+            ? $request->file('payment_receipt')->store('transaction-documents', 'public')
+            : null;
         $transaction->update([
             'renter_signed_document_path' => $docPath,
             'payment_receipt_path' => $receiptPath,
@@ -596,6 +651,36 @@ class TransactionController extends Controller
         $path = $request->file('owner_signed_document')->store('transaction-documents', 'public');
         $transaction->update([
             'owner_signed_document_path' => $path,
+        ]);
+
+        // Troca simples: não paga taxa de êxito -> conclui aqui
+        if ($transaction->transaction_type === QuotaTransaction::TYPE_EXCHANGE && !($transaction->is_fair_exchange ?? false)) {
+            $transaction->update([
+                'workflow_step' => QuotaTransaction::WORKFLOW_COMPLETED,
+                'status' => QuotaTransaction::STATUS_COMPLETED,
+                'payment_status' => QuotaTransaction::PAYMENT_COMPLETED,
+            ]);
+            if ($transaction->quota) {
+                $transaction->quota->update([
+                    'status' => Quota::STATUS_EXCHANGED,
+                    'negotiation_deadline' => null,
+                    'current_transaction_id' => null,
+                ]);
+            }
+            if ($transaction->exchange_quota_id) {
+                Quota::where('id', $transaction->exchange_quota_id)->update([
+                    'status' => Quota::STATUS_EXCHANGED,
+                    'negotiation_deadline' => null,
+                    'current_transaction_id' => null,
+                ]);
+            }
+            if ($transaction->digitalContract) {
+                $transaction->digitalContract->update(['is_completed' => true]);
+            }
+            return redirect()->route('transactions.owner-manage', $transaction)->with('success', 'Troca simples finalizada (sem taxa de êxito).');
+        }
+
+        $transaction->update([
             'workflow_step' => QuotaTransaction::WORKFLOW_AWAITING_TAX_PAYMENT,
         ]);
         return redirect()->route('transactions.owner-manage', $transaction)->with('success', 'Processo finalizado. O interessado foi liberado para pagar a taxa de êxito.');

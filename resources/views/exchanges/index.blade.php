@@ -30,7 +30,7 @@
                 <p class="mb-4 text-muted">
                     Busque e solicite troca de cotas ou frações disponíveis que atendam às suas necessidades.
                 </p>
-                <a href="{{ route('quotas.index') }}" class="btn btn-success btn-lg fw-bold">
+                <a href="{{ route('exchanges.refine') }}" class="btn btn-success btn-lg fw-bold">
                     <i class="fas fa-exchange-alt me-2"></i>Trocar
                 </a>
             </div>

@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', ($transactionType == 'buy' ? 'Iniciar Compra' : 'Iniciar Aluguel') . ' — ' . ($quota->hotel_name ?? 'Cota'))
+@section('title', ($transactionType == 'buy' ? 'Iniciar Compra' : ($transactionType == 'exchange' ? 'Iniciar Troca' : 'Iniciar Aluguel')) . ' — ' . ($quota->hotel_name ?? 'Cota'))
 
 @section('content')
 <div class="container py-5">
@@ -24,21 +24,22 @@
                     </ul>
 
                     @php
-                        $hasEnabledRentPeriods = false;
+                        $enabledActions = $transactionType === 'exchange' ? ['exchange', 'rent_exchange'] : ['rent', 'rent_exchange'];
+                        $hasEnabledPeriods = false;
                         if ($quota->is_fractioned && !empty($quota->fraction_details['fraction_weeks'])) {
                             foreach ($quota->fraction_details['fraction_weeks'] as $weekData) {
                                 foreach ($weekData['periods'] ?? [] as $p) {
-                                    if (is_array($p) && \App\Models\Quota::isPeriodEnabledWithAction($p) && in_array($p['action'] ?? '', ['rent', 'rent_exchange'], true)) {
-                                        $hasEnabledRentPeriods = true;
+                                    if (is_array($p) && \App\Models\Quota::isPeriodEnabledWithAction($p) && in_array($p['action'] ?? '', $enabledActions, true)) {
+                                        $hasEnabledPeriods = true;
                                         break 2;
                                     }
                                 }
                             }
                         }
                     @endphp
-                    @if($quota->is_fractioned && !empty($quota->fraction_details['fraction_weeks']) && $hasEnabledRentPeriods)
+                    @if($quota->is_fractioned && !empty($quota->fraction_details['fraction_weeks']) && $hasEnabledPeriods)
                         <h6 class="mt-4">Períodos de Fração disponíveis</h6>
-                        <form id="negotiationForm" method="POST" action="{{ $transactionType == 'buy' ? route('quotas.buy', $quota) : route('quotas.rent', $quota) }}">
+                        <form id="negotiationForm" method="POST" action="{{ $transactionType == 'buy' ? route('quotas.buy', $quota) : ($transactionType == 'exchange' ? route('quotas.exchange', $quota) : route('quotas.rent', $quota)) }}">
                             @csrf
                             <div class="list-group mb-3">
                                 @php
@@ -47,7 +48,7 @@
                                 @endphp
                                 @foreach($quota->fraction_details['fraction_weeks'] as $weekNumber => $weekData)
                                     @foreach($weekData['periods'] as $periodIndex => $period)
-                                        @if(!is_array($period) || !\App\Models\Quota::isPeriodEnabledWithAction($period) || !in_array($period['action'] ?? '', ['rent', 'rent_exchange'], true))
+                                        @if(!is_array($period) || !\App\Models\Quota::isPeriodEnabledWithAction($period) || !in_array($period['action'] ?? '', $enabledActions, true))
                                             @continue
                                         @endif
                                         @php
@@ -67,7 +68,7 @@
                             </div>
 
                             @else
-                            <form id="negotiationForm" method="POST" action="{{ $transactionType == 'buy' ? route('quotas.buy', $quota) : route('quotas.rent', $quota) }}">
+                            <form id="negotiationForm" method="POST" action="{{ $transactionType == 'buy' ? route('quotas.buy', $quota) : ($transactionType == 'exchange' ? route('quotas.exchange', $quota) : route('quotas.rent', $quota)) }}">
                                 @csrf
                                 <input type="hidden" name="selected_period" value="">
                                 <div class="mb-3">
@@ -77,6 +78,24 @@
                             @endif
 
                             <input type="hidden" name="total_amount" id="total_amount" value="{{ $quota->rental_price ?? 0 }}">
+
+                            @if($transactionType === 'exchange')
+                            <div class="mb-4">
+                                <h5 class="fw-bold mb-3">Escolha sua cota para oferecer na troca</h5>
+                                <select name="exchange_quota_id" class="form-select" required>
+                                    <option value="">Selecione</option>
+                                    @foreach(($myQuotas ?? collect()) as $myQuota)
+                                        <option value="{{ $myQuota->id }}">{{ $myQuota->hotel_name }} — {{ $myQuota->location }}</option>
+                                    @endforeach
+                                </select>
+                                <div class="form-check mt-3">
+                                    <input class="form-check-input" type="checkbox" value="1" id="is_fair_exchange" name="is_fair_exchange">
+                                    <label class="form-check-label" for="is_fair_exchange">
+                                        Troca justa (pode gerar taxa de êxito)
+                                    </label>
+                                </div>
+                            </div>
+                            @endif
 
                             <div class="mb-3">
                                 <label class="form-label">Seus dados</label>

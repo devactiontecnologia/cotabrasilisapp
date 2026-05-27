@@ -15,7 +15,7 @@
                 <p class="mb-4 text-muted">
                     Busque e solicite compra de cotas disponíveis que atendam às suas necessidades.
                 </p>
-                <a href="{{ route('quotas.index') }}" class="btn btn-success btn-lg fw-bold">
+                <a href="{{ route('purchases.refine') }}" class="btn btn-success btn-lg fw-bold">
                     <i class="fas fa-shopping-cart me-2"></i>Comprar Cota(s)
                 </a>
             </div>
@@ -79,4 +79,3 @@
 </div>
 </div>
 @endsection
-
