@@ -2,16 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\Asaas\AsaasSubaccountService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
-    public function __construct(
-        protected AsaasSubaccountService $asaasSubaccountService
-    ) {}
-
     /**
      * Show the user dashboard or the pending-approval screen.
      */
@@ -27,17 +22,7 @@ class DashboardController extends Controller
             return view('dashboard-pending-approval');
         }
 
-        $user->load('asaasSubaccount');
-        $asaasSubaccount = $user->asaasSubaccount;
-        $walletBalance = 0.0;
-        $walletAvailable = false;
-
-        if ($asaasSubaccount?->isActive()) {
-            $walletBalance = $this->asaasSubaccountService->getBalance($asaasSubaccount);
-            $walletAvailable = true;
-        }
-
-        return view('dashboard', compact('profile', 'asaasSubaccount', 'walletBalance', 'walletAvailable'));
+        return view('dashboard', compact('profile'));
     }
 
     /**

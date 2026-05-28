@@ -792,86 +792,6 @@
         padding: 1.5rem 0.5rem;
     }
 
-    /* Carteira digital Asaas */
-    .wallet-card {
-        background: linear-gradient(135deg, rgba(0, 151, 57, 0.95), rgba(1, 64, 52, 0.92));
-        border-radius: 24px;
-        color: #fff;
-        box-shadow: 0 24px 60px rgba(5, 74, 40, 0.28);
-        overflow: hidden;
-        width: 100%;
-    }
-
-    .wallet-card .card-body {
-        padding: 1.85rem 2rem;
-    }
-
-    .wallet-card__title {
-        font-size: 1.15rem;
-        font-weight: 800;
-        text-transform: capitalize;
-        margin: 0 0 0.35rem;
-        letter-spacing: 0.01em;
-    }
-
-    .wallet-card__subtitle {
-        font-size: 0.88rem;
-        opacity: 0.88;
-        margin: 0;
-    }
-
-    .wallet-card__balance-label {
-        font-size: 0.75rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        opacity: 0.85;
-        margin-top: 1.5rem;
-    }
-
-    .wallet-card__balance {
-        font-size: 2.35rem;
-        font-weight: 800;
-        line-height: 1.1;
-        margin: 0.25rem 0 0;
-    }
-
-    .wallet-card__actions {
-        margin-top: 1.5rem;
-    }
-
-    .wallet-card a.wallet-card__btn {
-        background: var(--dashboard-green) !important;
-        color: #fff !important;
-        font-weight: 700;
-        border: none;
-        border-radius: 14px;
-        padding: 0.75rem 1.35rem;
-        text-decoration: none !important;
-        display: inline-flex;
-        align-items: center;
-        transition: background 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .wallet-card a.wallet-card__btn:hover,
-    .wallet-card a.wallet-card__btn:focus {
-        background: #007a2f !important;
-        color: #fff !important;
-        box-shadow: 0 8px 20px rgba(0, 122, 47, 0.35);
-    }
-
-    .wallet-card a.wallet-card__btn i {
-        color: #fff !important;
-    }
-
-    .wallet-card__alert {
-        background: rgba(255, 255, 255, 0.15);
-        border-radius: 12px;
-        padding: 0.75rem 1rem;
-        font-size: 0.85rem;
-        margin-top: 1rem;
-    }
-
     @media (max-width: 1050px) {
         .hub-stats-row,
         .hub-columns {
@@ -1042,46 +962,6 @@
                     </a>
                 </div>
             @endif
-        </div>
-    </article>
-
-    <!-- Carteira digital (subconta Asaas) -->
-    <article class="wallet-card">
-        <div class="card-body">
-            <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
-                <div>
-                    <h2 class="wallet-card__title">Sua carteira digital Cota Brasilis</h2>
-                    <p class="wallet-card__subtitle">Valores das suas negociações de aluguel, troca e compra</p>
-                </div>
-                <div class="rounded-circle bg-white bg-opacity-25 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 52px; height: 52px;">
-                    <i class="fas fa-wallet fa-lg"></i>
-                </div>
-            </div>
-
-            <p class="wallet-card__balance-label mb-0">Saldo</p>
-            <p class="wallet-card__balance">
-                R$ {{ number_format(($walletAvailable ?? false) ? ($walletBalance ?? 0) : ($asaasSubaccount->cached_balance ?? 0), 2, ',', '.') }}
-            </p>
-
-            @if(!($walletAvailable ?? false))
-                <div class="wallet-card__alert">
-                    @if($asaasSubaccount ?? null)
-                        @if(!$asaasSubaccount->isActive())
-                            <i class="fas fa-info-circle me-1"></i>
-                            {{ $asaasSubaccount->last_error ?? 'Sua carteira será ativada ao iniciar aluguel, troca ou compra (Quero alugar / trocar / comprar).' }}
-                        @endif
-                    @else
-                        <i class="fas fa-info-circle me-1"></i>
-                        Sua carteira será criada automaticamente quando você iniciar um aluguel, troca ou compra (Quero alugar / trocar / comprar).
-                    @endif
-                </div>
-            @endif
-
-            <div class="wallet-card__actions">
-                <a href="{{ route('wallet.transfer.form') }}" class="btn btn-success wallet-card__btn">
-                    <i class="fas fa-exchange-alt me-2"></i>Fazer transferência de valor
-                </a>
-            </div>
         </div>
     </article>
 

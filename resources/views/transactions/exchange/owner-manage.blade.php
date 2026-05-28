@@ -1,18 +1,27 @@
 @extends('layouts.app')
-@section('title', 'Gerenciar interesse')
+@section('title', 'Gerenciar troca')
 @section('content')
 <div class="container py-5">
     <div class="card shadow border-0 rounded-4">
         <div class="card-header bg-success text-white py-3 rounded-top-4">
-            <h5 class="mb-0"><i class="fas fa-user-friends me-2"></i>Dados do interessado</h5>
+            <h5 class="mb-0"><i class="fas fa-exchange-alt me-2"></i>Troca — dados do interessado</h5>
         </div>
         <div class="card-body p-4">
             <p class="mb-4">
-                O prazo para essa transação expira em 12 horas.
-                <strong>Você</strong> e o <strong>Interessado</strong> precisam cumprir os prazos de suas tarefas.
-                Envie o Termo de Autorização de Hospedagem para Terceiros/<em>Voucher</em> preenchido com os nomes e os CPF's dos interessados para essa reserva.<br>
+                <strong>Troca de período</strong> — sem valores monetários entre as partes.
+                O prazo para essa transação expira em 06 horas.
+                Envie o Termo de Autorização de Hospedagem para Terceiros/<em>Voucher</em> preenchido com os nomes e CPFs dos interessados, e assinado pelo Gov.br.<br>
                 Você receberá alertas por <em>email</em> e <em>Whatsapp</em>.
             </p>
+
+            @php $transaction->loadMissing('exchangeQuota'); @endphp
+            @if($transaction->exchangeQuota)
+            <div class="alert alert-warning border-0 mb-4">
+                <h6 class="fw-bold mb-2"><i class="fas fa-exchange-alt me-2"></i>Cota oferecida pelo interessado</h6>
+                <p class="mb-1"><strong>{{ $transaction->exchangeQuota->hotel_name }}</strong> — {{ $transaction->exchangeQuota->location }}</p>
+                <p class="mb-0 small">{{ $transaction->exchangeQuota->start_date?->format('d/m/Y') }} a {{ $transaction->exchangeQuota->end_date?->format('d/m/Y') }}</p>
+            </div>
+            @endif
 
             <div class="row mb-4">
                 <div class="col-md-6">
@@ -80,14 +89,9 @@
                 <h6 class="fw-bold mb-1 text-success">
                     <i class="fas fa-file-signature me-2"></i>Termo de Autorização de Hospedagem para Terceiros
                 </h6>
-                <p class="text-muted small mb-3">Informe seu PIX, anexe o documento devidamente preenchido  e envie para o interessado assinar com gov.br.</p>
+                <p class="text-muted small mb-3">Anexe o documento devidamente preenchido e envie para o interessado assinar com gov.br.</p>
                 <form method="POST" action="{{ route('transactions.owner-document.upload', $transaction) }}" enctype="multipart/form-data">
                     @csrf
-                    <div class="mb-3">
-                        <label for="owner_pix" class="form-label fw-semibold small text-secondary">Informe seu PIX para receber o valor do aluguel <span class="text-danger">*</span></label>
-                        <input type="text" name="owner_pix" id="owner_pix" class="form-control" value="{{ old('owner_pix', $transaction->owner_pix ?? '') }}" placeholder="Chave PIX (e-mail, CPF, telefone ou aleatória)" required maxlength="255">
-                        @error('owner_pix')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
-                    </div>
                     <label class="d-block mb-2 fw-semibold small text-secondary">Selecione o arquivo do documento</label>
                     <div class="file-upload-zone rounded-3 border border-2 border-dashed border-success border-opacity-50 bg-white p-4 text-center mb-3">
                         <input type="file" name="document" id="term-document-input" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
@@ -123,13 +127,13 @@
                 </form>
             </div>
             @else
-            <p class="text-success mt-2"><i class="fas fa-check me-1"></i>Processo finalizado. Interessado pode pagar a taxa de êxito.</p>
+            <p class="text-success mt-2"><i class="fas fa-check me-1"></i>Processo finalizado.@if($transaction->is_fair_exchange) Interessado pode pagar a taxa de êxito (troca justa).@else Troca concluída.@endif</p>
             @endif
             @endif
 
-            @if(!empty($transaction->payment_receipt_path))
+            @if(($transaction->is_fair_exchange ?? false) && !empty($transaction->payment_receipt_path))
             <hr>
-            <h6 class="fw-bold mb-2">Comprovante de pagamento (enviado pelo interessado)</h6>
+            <h6 class="fw-bold mb-2">Comprovante da taxa de êxito</h6>
             <a href="{{ route('transactions.download-payment-receipt', $transaction) }}" class="btn btn-outline-primary btn-sm">Ver comprovante</a>
             @endif
 

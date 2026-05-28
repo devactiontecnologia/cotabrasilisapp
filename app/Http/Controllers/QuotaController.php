@@ -381,6 +381,15 @@ class QuotaController extends Controller
         $query = Quota::where('status', Quota::STATUS_AVAILABLE)
             ->with(['user', 'hotel']);
 
+        // Telas exclusivas de refine: troca usa oferta ativa; compra usa action=sell no fracionamento.
+        $exchangeRefine = $request->boolean('exchange_refine');
+        $purchaseRefine = $request->boolean('purchase_refine');
+        if ($exchangeRefine) {
+            $request->merge(['transaction_type' => 'exchange']);
+        } elseif ($purchaseRefine) {
+            $request->merge(['transaction_type' => 'purchase']);
+        }
+
         // Verificar se há algum filtro aplicado (transaction_type não conta como filtro)
         $hasAnyFilter = $request->filled('hotel_name') ||
                        $request->filled('city') ||
@@ -432,6 +441,16 @@ class QuotaController extends Controller
             $wishlistIds = $this->wishlistQuotaIdsForUser();
 
             return view('quotas.index', compact('quotas', 'profile', 'favoriteIds', 'wishlistIds'));
+        }
+
+        if ($exchangeRefine) {
+            // Restringe à experiência de troca para frações com oferta de troca ativa.
+            // Evita depender de LIKE em JSON serializado, que pode variar por formato.
+            $query->where('is_fractioned', true)
+                ->whereHasActiveExchangeListing();
+        } elseif ($purchaseRefine) {
+            $query->whereFractionPeriodAction('sell')
+                ->whereHasActiveSaleListing();
         }
 
         // Apply filters - todos funcionam individualmente e em conjunto

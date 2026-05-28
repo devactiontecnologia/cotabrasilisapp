@@ -61,8 +61,16 @@
             <div class="card-body p-4 p-lg-5">
                 <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3 mb-4">
                     <div>
-                        <h4 class="fw-semibold mb-1">Refine sua busca por Cotas ou frações</h4>
-                        <p class="text-muted mb-0">Aplique filtros combinados para encontrar a cota ou fração ideal para alugar com rapidez.</p>
+                        @if(request('exchange_refine'))
+                            <h4 class="fw-semibold mb-1">Refine sua busca por Cotas ou Frações para Troca</h4>
+                            <p class="text-muted mb-0">Aplique um ou mais filtros para encontrá-las com agilidade e precisão.</p>
+                        @elseif(request('purchase_refine'))
+                            <h4 class="fw-semibold mb-1">Refine sua busca por Cotas ou Frações para Compra</h4>
+                            <p class="text-muted mb-0">Aplique filtros para encontrar somente cotas ou frações liberadas para <strong>compra</strong>.</p>
+                        @else
+                            <h4 class="fw-semibold mb-1">Refine sua busca por Cotas ou frações</h4>
+                            <p class="text-muted mb-0">Aplique filtros combinados para encontrar a cota ou fração ideal para alugar com rapidez.</p>
+                        @endif
                     </div>
                     <div class="d-flex gap-2">
                         <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary px-4 py-2">
@@ -89,6 +97,12 @@
                     @endif
                     @if(request('transaction_type'))
                         <input type="hidden" name="transaction_type" value="{{ request('transaction_type') }}">
+                    @endif
+                    @if(request('exchange_refine'))
+                        <input type="hidden" name="exchange_refine" value="1">
+                    @endif
+                    @if(request('purchase_refine'))
+                        <input type="hidden" name="purchase_refine" value="1">
                     @endif
                     @include('quotas.partials.filters')
                 </form>
@@ -239,7 +253,7 @@
                                             $listPriceCard = $quota->getMarketplaceListPrice($txCard);
                                         @endphp
                                         <span class="badge rounded-pill bg-{{ $txCard === 'exchange' ? 'warning' : ($txCard === 'sell' || $txCard === 'buy' ? 'danger' : 'success') }} text-white">
-                                            <i class="fas {{ $txCard === 'exchange' ? 'fa-exchange-alt' : ($txCard === 'sell' || $txCard === 'buy' ? 'fa-hand-holding-usd' : 'fa-dollar-sign') }} me-1"></i>{{ $txCard === 'exchange' ? 'Troca' : (($txCard === 'sell' || $txCard === 'buy') ? 'Venda' : 'Aluguel') }}
+                                            <i class="fas {{ $txCard === 'exchange' ? 'fa-exchange-alt' : ($txCard === 'buy' ? 'fa-shopping-cart' : ($txCard === 'sell' ? 'fa-hand-holding-usd' : 'fa-dollar-sign')) }} me-1"></i>{{ $txCard === 'exchange' ? 'Troca' : ($txCard === 'sell' ? 'Venda' : ($txCard === 'buy' ? 'Compra' : 'Aluguel')) }}
                                         </span>
                                         </div>
                                         </div>
@@ -381,6 +395,59 @@
 @push('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        @if(request('exchange_refine') || request('purchase_refine'))
+        // Nas telas de refine, evita múltiplos cliques em "Buscar" e "Limpar filtros".
+        function mountRefineLoading() {
+            const form = document.querySelector('form[action="{{ route('quotas.index') }}"]');
+            const submitBtn = document.querySelector('.js-refine-submit');
+            const clearBtn = document.querySelector('.js-refine-clear');
+            const searchLabel = @json(request('purchase_refine') ? 'Buscando cotas e frações para compra...' : 'Buscando cotas e frações para troca...');
+            let busy = false;
+
+            const showLoading = function(label) {
+                if (busy) return false;
+                busy = true;
+                const overlay = document.createElement('div');
+                overlay.className = 'exchange-refine-loading-overlay';
+                overlay.innerHTML = `
+                    <div class="exchange-refine-loading-box">
+                        <div class="spinner-border text-success mb-3" role="status" aria-hidden="true"></div>
+                        <div class="fw-semibold text-dark">${label}</div>
+                        <div class="small text-muted">Aguarde, estamos processando sua solicitação...</div>
+                    </div>
+                `;
+                document.body.appendChild(overlay);
+
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.classList.add('disabled');
+                }
+                if (clearBtn) {
+                    clearBtn.classList.add('disabled');
+                    clearBtn.style.pointerEvents = 'none';
+                }
+                return true;
+            };
+
+            if (form) {
+                form.addEventListener('submit', function() {
+                    return showLoading(searchLabel);
+                });
+            }
+
+            if (clearBtn) {
+                clearBtn.addEventListener('click', function(e) {
+                    if (busy) {
+                        e.preventDefault();
+                        return;
+                    }
+                    showLoading('Limpando filtros...');
+                });
+            }
+        }
+        mountRefineLoading();
+        @endif
+
         // Função para inicializar sliders de preço em cada tab
         function initPriceSliders() {
             const priceSliders = document.querySelectorAll('.price-range-slider');
@@ -1001,6 +1068,27 @@
     .hotel-options-subtitle {
         font-size: 0.95rem;
     }
+}
+</style>
+<style>
+.exchange-refine-loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.35);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+}
+.exchange-refine-loading-box {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px 22px;
+    min-width: 320px;
+    max-width: 90vw;
+    text-align: center;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
 }
 </style>
 @endpush

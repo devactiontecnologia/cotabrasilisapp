@@ -35,6 +35,15 @@ class PurchaseController extends Controller
         return view('purchases.index', compact('purchases'));
     }
 
+    public function refine(Request $request)
+    {
+        return redirect()->route('quotas.index', array_merge($request->all(), [
+            'transaction_type' => 'purchase',
+            'purchase_refine' => 1,
+            'search' => $request->input('search', 1),
+        ]));
+    }
+
     public function create()
     {
         $hotels = Hotel::where('is_active', true)->get();

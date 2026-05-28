@@ -278,14 +278,11 @@
                             $currentTransactionType = $transactionType ?? request('transaction_type', 'rent');
                         @endphp
                         @if($currentTransactionType == 'exchange' || $quota->is_exchange)
-                            <form method="POST" action="{{ route('quotas.exchange', $quota) }}" class="d-grid gap-2 mb-3">
-                                @csrf
-                                <button type="submit" class="btn btn-warning btn-lg w-100 text-white">
-                                    <i class="fas fa-exchange-alt me-2"></i>Iniciar Troca
-                                </button>
-                            </form>
+                            <a href="{{ route('quotas.negotiate', ['quota' => $quota, 'type' => 'exchange']) }}" class="btn btn-warning btn-lg w-100 text-white mb-3">
+                                <i class="fas fa-exchange-alt me-2"></i>Iniciar Troca
+                            </a>
                             <p class="text-muted small mb-0 text-center">
-                                <i class="fas fa-info-circle me-1"></i>Prepare uma cota equivalente para a negociação.
+                                <i class="fas fa-info-circle me-1"></i>Prepare uma cota equivalente para a negociação (fração ou cota de troca, sem valores monetários).
                             </p>
                         @elseif($currentTransactionType == 'buy')
                             <a href="{{ route('quotas.negotiate', ['quota' => $quota, 'type' => 'buy']) }}" class="btn btn-success btn-lg w-100">

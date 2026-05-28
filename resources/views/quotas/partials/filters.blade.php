@@ -336,10 +336,17 @@
 </div>
 <div class="d-flex flex-column flex-md-row align-items-md-center gap-3 mt-4">
     <div class="d-flex gap-2">
-        <button type="submit" class="btn btn-success px-4 py-2">
+        <button type="submit" class="btn btn-success px-4 py-2 js-refine-submit">
             <i class="fas fa-search me-2"></i>Buscar cota ou fração ideal
         </button>
-        <a href="{{ route('quotas.index', ['transaction_type' => request('transaction_type', 'rent')]) }}" class="btn btn-outline-secondary px-4 py-2">
+        <a
+            href="{{ route('quotas.index', array_filter([
+                'transaction_type' => request('transaction_type', 'rent'),
+                'exchange_refine' => request('exchange_refine') ? 1 : null,
+                'purchase_refine' => request('purchase_refine') ? 1 : null,
+            ], fn ($v) => $v !== null && $v !== '')) }}"
+            class="btn btn-outline-secondary px-4 py-2 js-refine-clear"
+        >
             <i class="fas fa-sync me-2"></i>Limpar filtros
         </a>
     </div>
@@ -349,4 +356,3 @@
         </span>
     </div>
 </div>
-

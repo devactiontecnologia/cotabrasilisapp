@@ -113,14 +113,6 @@ class User extends Authenticatable
     }
 
     /**
-     * Subconta Asaas (carteira digital) do cotista.
-     */
-    public function asaasSubaccount()
-    {
-        return $this->hasOne(AsaasSubaccount::class);
-    }
-
-    /**
      * Get the KYC validations for this user.
      */
     public function kycValidations()

@@ -12,9 +12,11 @@ class QuotaTransaction extends Model
 
     protected $fillable = [
         'quota_id',
+        'exchange_quota_id',
         'renter_id',
         'owner_id',
         'transaction_type',
+        'is_fair_exchange',
         'total_amount',
         'owner_amount',
         'platform_fee',
@@ -50,6 +52,7 @@ class QuotaTransaction extends Model
         'total_amount' => 'decimal:2',
         'owner_amount' => 'decimal:2',
         'platform_fee' => 'decimal:2',
+        'is_fair_exchange' => 'boolean',
         'transaction_date' => 'datetime',
         'negotiation_started_at' => 'datetime',
         'negotiation_deadline' => 'datetime',
@@ -108,6 +111,14 @@ class QuotaTransaction extends Model
     public function quota(): BelongsTo
     {
         return $this->belongsTo(Quota::class);
+    }
+
+    /**
+     * Cota oferecida pelo interessado em uma troca.
+     */
+    public function exchangeQuota(): BelongsTo
+    {
+        return $this->belongsTo(Quota::class, 'exchange_quota_id');
     }
 
     /**
