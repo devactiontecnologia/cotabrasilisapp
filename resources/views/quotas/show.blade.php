@@ -284,7 +284,7 @@
                             <p class="text-muted small mb-0 text-center">
                                 <i class="fas fa-info-circle me-1"></i>Prepare uma cota equivalente para a negociação (fração ou cota de troca, sem valores monetários).
                             </p>
-                        @elseif($currentTransactionType == 'buy')
+                        @elseif(in_array($currentTransactionType, ['buy', 'purchase'], true))
                             <a href="{{ route('quotas.negotiate', ['quota' => $quota, 'type' => 'buy']) }}" class="btn btn-success btn-lg w-100">
                                     <i class="fas fa-shopping-cart me-2"></i>Iniciar Compra
                             </a>

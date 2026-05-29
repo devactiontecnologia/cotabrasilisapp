@@ -134,8 +134,15 @@
                                             </span>
                                             <div>
                                                 <small class="text-uppercase fw-semibold">Operação</small>
-                                            <span class="badge bg-{{ $transaction->transaction_type === 'rental' ? 'success' : 'warning' }} fw-semibold">
-                                                <i class="fas fa-{{ $transaction->transaction_type === 'rental' ? 'dollar-sign' : 'exchange-alt' }} me-1"></i>{{ $transaction->transaction_type === 'rental' ? 'Aluguel' : 'Troca' }}
+                                            @php
+                                                $txLabel = match ($transaction->transaction_type) {
+                                                    \App\Models\QuotaTransaction::TYPE_PURCHASE => ['Compra', 'success', 'shopping-cart'],
+                                                    \App\Models\QuotaTransaction::TYPE_EXCHANGE => ['Troca', 'warning', 'exchange-alt'],
+                                                    default => ['Aluguel', 'success', 'dollar-sign'],
+                                                };
+                                            @endphp
+                                            <span class="badge bg-{{ $txLabel[1] }} fw-semibold">
+                                                <i class="fas fa-{{ $txLabel[2] }} me-1"></i>{{ $txLabel[0] }}
                                                 </span>
                                             </div>
                                         </div>

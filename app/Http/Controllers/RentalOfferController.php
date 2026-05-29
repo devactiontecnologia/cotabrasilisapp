@@ -614,6 +614,11 @@ class RentalOfferController extends Controller
 
             $offer = RentalOffer::create($data);
 
+            if ($offer->quota) {
+                app(\App\Services\WishlistMatchingService::class)
+                    ->processNewPublishedListing($offer->quota, 'rental');
+            }
+
             // Enviar email de notificação
             try {
                 $emailService = new EmailService();

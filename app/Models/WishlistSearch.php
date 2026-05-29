@@ -11,6 +11,8 @@ class WishlistSearch extends Model
 
     protected $fillable = [
         'user_id',
+        'transaction_type',
+        'list_type',
         'hotel_name',
         'city',
         'state',

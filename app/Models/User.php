@@ -189,7 +189,9 @@ class User extends Authenticatable
      */
     public function wishlistQuotas()
     {
-        return $this->belongsToMany(Quota::class, 'user_wishlist_quotas')->withTimestamps();
+        return $this->belongsToMany(Quota::class, 'user_wishlist_quotas')
+            ->withPivot(['transaction_type', 'list_type'])
+            ->withTimestamps();
     }
 
     /**

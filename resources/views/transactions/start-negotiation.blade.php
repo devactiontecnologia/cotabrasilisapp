@@ -3,9 +3,8 @@
 @section('title', ($transactionType == 'buy' ? 'Iniciar Compra' : ($transactionType == 'exchange' ? 'Iniciar Troca' : 'Iniciar Aluguel')) . ' — ' . ($quota->hotel_name ?? 'Cota'))
 
 @section('content')
-<div class="container py-5">
-    <div class="row">
-        <div class="col-md-8">
+<div class="row g-4 align-items-start negotiation-page">
+        <div class="col-lg-8">
             <div class="card shadow-sm mb-4">
                 <div class="card-body">
                     <h4 class="fw-bold mb-3">{{ $quota->hotel_name }}</h4>
@@ -16,15 +15,21 @@
                         <li><strong>Quartos:</strong> {{ $quota->number_of_rooms ?? 'N/A' }}</li>
                         <li><strong>Hóspedes:</strong> {{ $quota->number_of_guests ?? 'N/A' }}</li>
                         @foreach($quota->getPeriodDisplayLines() as $periodLine)
-                        <li><strong>{{ trim($periodLine['label']) }}</strong> {{ $periodLine['formatted'] }}</li>
+                            <li><strong>{{ trim($periodLine['label']) }}</strong> {{ $periodLine['formatted'] }}</li>
                         @endforeach
                         @if($quota->getPeriodDisplayLines() === [])
-                        <li><strong>Período:</strong> {{ $quota->start_date?->format('d/m/Y') }} a {{ $quota->end_date?->format('d/m/Y') }}</li>
+                            <li><strong>Período:</strong> {{ $quota->start_date?->format('d/m/Y') }} a {{ $quota->end_date?->format('d/m/Y') }}</li>
                         @endif
                     </ul>
 
                     @php
-                        $enabledActions = $transactionType === 'exchange' ? ['exchange', 'rent_exchange'] : ['rent', 'rent_exchange'];
+                        $enabledActions = match ($transactionType) {
+                            'exchange' => ['exchange', 'rent_exchange'],
+                            'buy' => ['sell'],
+                            default => ['rent', 'rent_exchange'],
+                        };
+                        $saleListPrice = $transactionType === 'buy' ? ($quota->getMarketplaceListPrice('buy') ?? 0) : 0;
+                        $defaultTotal = $transactionType === 'buy' ? $saleListPrice : ($quota->rental_price ?? 0);
                         $hasEnabledPeriods = false;
                         if ($quota->is_fractioned && !empty($quota->fraction_details['fraction_weeks'])) {
                             foreach ($quota->fraction_details['fraction_weeks'] as $weekData) {
@@ -36,18 +41,27 @@
                                 }
                             }
                         }
+                        $formAction = $transactionType === 'buy'
+                            ? route('quotas.buy', $quota)
+                            : ($transactionType === 'exchange' ? route('quotas.exchange', $quota) : route('quotas.rent', $quota));
+                        $totalDays = ($quota->start_date && $quota->end_date)
+                            ? \Carbon\Carbon::parse($quota->start_date)->diffInDays(\Carbon\Carbon::parse($quota->end_date)) + 1
+                            : 1;
+                        if ($transactionType === 'buy') {
+                            $perDay = $saleListPrice > 0 && $totalDays ? ($saleListPrice / $totalDays) : $saleListPrice;
+                        } else {
+                            $perDay = $quota->rental_price && $totalDays ? ($quota->rental_price / $totalDays) : ($quota->rental_price ?? 0);
+                        }
                     @endphp
-                    @if($quota->is_fractioned && !empty($quota->fraction_details['fraction_weeks']) && $hasEnabledPeriods)
-                        <h6 class="mt-4">Períodos de Fração disponíveis</h6>
-                        <form id="negotiationForm" method="POST" action="{{ $transactionType == 'buy' ? route('quotas.buy', $quota) : ($transactionType == 'exchange' ? route('quotas.exchange', $quota) : route('quotas.rent', $quota)) }}">
-                            @csrf
+
+                    <form id="negotiationForm" method="POST" action="{{ $formAction }}">
+                        @csrf
+
+                        @if($quota->is_fractioned && !empty($quota->fraction_details['fraction_weeks']) && $hasEnabledPeriods)
+                            <h6 class="mt-4">Períodos de Fração disponíveis</h6>
                             <div class="list-group mb-3">
-                                @php
-                                    $totalDays = ($quota->start_date && $quota->end_date) ? \Carbon\Carbon::parse($quota->start_date)->diffInDays(\Carbon\Carbon::parse($quota->end_date)) + 1 : 1;
-                                    $perDay = $quota->rental_price && $totalDays ? ($quota->rental_price / $totalDays) : ($quota->rental_price ?? 0);
-                                @endphp
-                                @foreach($quota->fraction_details['fraction_weeks'] as $weekNumber => $weekData)
-                                    @foreach($weekData['periods'] as $periodIndex => $period)
+                                @foreach($quota->fraction_details['fraction_weeks'] as $weekData)
+                                    @foreach($weekData['periods'] as $period)
                                         @if(!is_array($period) || !\App\Models\Quota::isPeriodEnabledWithAction($period) || !in_array($period['action'] ?? '', $enabledActions, true))
                                             @continue
                                         @endif
@@ -66,20 +80,17 @@
                                     @endforeach
                                 @endforeach
                             </div>
+                        @else
+                            <input type="hidden" name="selected_period" value="">
+                            <div class="mb-3">
+                                <p class="mb-1"><strong>Preço total:</strong></p>
+                                <div class="fs-4 fw-bold">R$ {{ number_format($defaultTotal, 2, ',', '.') }}</div>
+                            </div>
+                        @endif
 
-                            @else
-                            <form id="negotiationForm" method="POST" action="{{ $transactionType == 'buy' ? route('quotas.buy', $quota) : ($transactionType == 'exchange' ? route('quotas.exchange', $quota) : route('quotas.rent', $quota)) }}">
-                                @csrf
-                                <input type="hidden" name="selected_period" value="">
-                                <div class="mb-3">
-                                    <p class="mb-1"><strong>Preço total:</strong></p>
-                                    <div class="fs-4 fw-bold">R$ {{ number_format($quota->rental_price ?? 0, 2, ',', '.') }}</div>
-                                </div>
-                            @endif
+                        <input type="hidden" name="total_amount" id="total_amount" value="{{ $defaultTotal }}">
 
-                            <input type="hidden" name="total_amount" id="total_amount" value="{{ $quota->rental_price ?? 0 }}">
-
-                            @if($transactionType === 'exchange')
+                        @if($transactionType === 'exchange')
                             <div class="mb-4">
                                 <h5 class="fw-bold mb-3">Escolha sua cota ou fração para oferecer na troca</h5>
                                 <select name="exchange_quota_id" class="form-select" required>
@@ -95,30 +106,30 @@
                                     </label>
                                 </div>
                             </div>
-                            @endif
+                        @endif
 
-                            <div class="mb-3">
-                                <label class="form-label">Seus dados</label>
-                                <div class="border rounded-3 p-3">
-                                    <p class="mb-1"><strong>{{ auth()->user()->name }}</strong></p>
-                                    <p class="mb-0 text-muted">{{ auth()->user()->email }}</p>
-                                </div>
+                        <div class="mb-3">
+                            <label class="form-label">Seus dados</label>
+                            <div class="border rounded-3 p-3">
+                                <p class="mb-1"><strong>{{ auth()->user()->name }}</strong></p>
+                                <p class="mb-0 text-muted">{{ auth()->user()->email }}</p>
                             </div>
+                        </div>
 
-                            @if($transactionType === 'rent' || $transactionType === 'buy')
+                        @if($transactionType === 'rent' || $transactionType === 'buy')
                             <div class="mb-4">
                                 <h5 class="fw-bold mb-3">Informe as pessoas que irão se hospedar juntamente com você</h5>
                                 <div id="guests-container" class="border rounded-3 p-3 bg-light">
-                                    <div class="guest-row row g-2 align-items-end mb-2" data-index="0">
-                                        <div class="col-md-5">
+                                    <div class="guest-row d-flex flex-wrap gap-2 align-items-end mb-2" data-index="0">
+                                        <div class="flex-grow-1" style="min-width: 140px;">
                                             <label class="form-label small mb-1">Nome completo</label>
                                             <input type="text" name="guests[0][name]" class="form-control form-control-sm" placeholder="Nome completo">
                                         </div>
-                                        <div class="col-md-4">
+                                        <div style="min-width: 120px; max-width: 160px;">
                                             <label class="form-label small mb-1">CPF</label>
                                             <input type="text" name="guests[0][cpf]" class="form-control form-control-sm guest-cpf" placeholder="000.000.000-00" maxlength="14">
                                         </div>
-                                        <div class="col-md-3 text-md-end">
+                                        <div class="flex-shrink-0">
                                             <button type="button" class="btn btn-outline-danger btn-sm btn-remove-guest" title="Remover" style="display: none;">
                                                 <i class="fas fa-minus"></i>
                                             </button>
@@ -129,59 +140,62 @@
                                     <i class="fas fa-plus me-1"></i>Adicionar pessoa
                                 </button>
                             </div>
-                            @endif
+                        @endif
 
-                            <div class="d-flex gap-2">
-                                <button type="submit" class="btn btn-success">
-                                    @if($transactionType == 'buy')
-                                        Quero comprar
-                                    @elseif($transactionType == 'exchange')
-                                        Quero trocar
-                                    @else
-                                        Quero alugar
-                                    @endif
-                                </button>
-                                <a href="{{ route('quotas.show', $quota) }}" class="btn btn-outline-secondary">Voltar</a>
-                            </div>
-                        </form>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-success">
+                                @if($transactionType == 'buy')
+                                    Quero comprar
+                                @elseif($transactionType == 'exchange')
+                                    Quero trocar
+                                @else
+                                    Quero alugar
+                                @endif
+                            </button>
+                            <a href="{{ route('quotas.show', array_merge(['quota' => $quota], request()->only('transaction_type', 'hide_buttons'))) }}" class="btn btn-outline-secondary">Voltar</a>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="card shadow-sm">
-                <div class="card-body">
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0 rounded-4 sticky-lg-top" style="top: 110px;">
+                <div class="card-body p-4">
                     <h6 class="fw-semibold">Informações do Hotel</h6>
                     <p class="mb-1"><strong>{{ $quota->hotel_name }}</strong></p>
                     <p class="text-muted mb-2">{{ $quota->location }}</p>
                     <hr>
-                    <p class="mb-0 small text-muted">Ao confirmar você iniciará a negociação. Após a confirmação e pagamento será solicitado o termo de autorização de hospedagem.</p>
+                    @if($transactionType === 'buy')
+                        <p class="mb-0 small text-muted">Ao confirmar você iniciará a negociação de compra. O proprietário enviará o documento para assinatura; em seguida seguem pagamento e taxa de êxito, no mesmo fluxo do aluguel.</p>
+                    @else
+                        <p class="mb-0 small text-muted">Ao confirmar você iniciará a negociação. Após a confirmação e pagamento será solicitado o termo de autorização de hospedagem.</p>
+                    @endif
                 </div>
             </div>
         </div>
-    </div>
 </div>
+@endsection
+
+@push('styles')
+<style>
+    .negotiation-page > [class*="col-"] {
+        min-width: 0;
+    }
+</style>
+@endpush
 
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const radios = document.querySelectorAll('input[name="selected_period"]');
+    const radios = document.querySelectorAll('input[name="selected_period"][type="radio"]');
     const totalInput = document.getElementById('total_amount');
     radios.forEach(r => {
         r.addEventListener('change', function() {
             const price = parseFloat(this.dataset.price || 0);
             if (totalInput) totalInput.value = price;
-            let hidden = document.querySelector('input[name="selected_period"][type="hidden"]');
-            if (!hidden) {
-                hidden = document.createElement('input');
-                hidden.type = 'hidden';
-                hidden.name = 'selected_period';
-                document.getElementById('negotiationForm').appendChild(hidden);
-            }
-            hidden.value = this.value;
         });
     });
 
-    // CPF mask: 000.000.000-00
     function maskCpf(input) {
         let v = input.value.replace(/\D/g, '');
         if (v.length > 11) v = v.slice(0, 11);
@@ -197,7 +211,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.target.classList && e.target.classList.contains('guest-cpf')) maskCpf(e.target);
     });
 
-    // Dynamic guests: add / remove
     const container = document.getElementById('guests-container');
     const btnAdd = document.getElementById('btn-add-guest');
     if (container && btnAdd) {
@@ -212,7 +225,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         function updateRemoveButtons() {
             const rows = container.querySelectorAll('.guest-row');
-            rows.forEach(function(row, i) {
+            rows.forEach(function(row) {
                 const btn = row.querySelector('.btn-remove-guest');
                 if (btn) btn.style.display = rows.length > 1 ? 'inline-block' : 'none';
             });
@@ -231,9 +244,9 @@ document.addEventListener('DOMContentLoaded', function() {
         btnAdd.addEventListener('click', function() {
             const index = getNextIndex();
             const row = document.createElement('div');
-            row.className = 'guest-row row g-2 align-items-end mb-2';
+            row.className = 'guest-row d-flex flex-wrap gap-2 align-items-end mb-2';
             row.setAttribute('data-index', index);
-            row.innerHTML = '<div class="col-md-5"><label class="form-label small mb-1">Nome completo</label><input type="text" name="guests[' + index + '][name]" class="form-control form-control-sm" placeholder="Nome completo"></div><div class="col-md-4"><label class="form-label small mb-1">CPF</label><input type="text" name="guests[' + index + '][cpf]" class="form-control form-control-sm guest-cpf" placeholder="000.000.000-00" maxlength="14"></div><div class="col-md-3 text-md-end"><button type="button" class="btn btn-outline-danger btn-sm btn-remove-guest" title="Remover"><i class="fas fa-minus"></i></button></div>';
+            row.innerHTML = '<div class="flex-grow-1" style="min-width:140px"><label class="form-label small mb-1">Nome completo</label><input type="text" name="guests[' + index + '][name]" class="form-control form-control-sm" placeholder="Nome completo"></div><div style="min-width:120px;max-width:160px"><label class="form-label small mb-1">CPF</label><input type="text" name="guests[' + index + '][cpf]" class="form-control form-control-sm guest-cpf" placeholder="000.000.000-00" maxlength="14"></div><div class="flex-shrink-0"><button type="button" class="btn btn-outline-danger btn-sm btn-remove-guest" title="Remover"><i class="fas fa-minus"></i></button></div>';
             container.appendChild(row);
             row.querySelector('.guest-cpf').addEventListener('input', function() { maskCpf(this); });
             row.querySelector('.btn-remove-guest').addEventListener('click', function() {

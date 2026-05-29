@@ -64,6 +64,7 @@ class QuotaTransaction extends Model
     // Transaction types
     const TYPE_RENTAL = 'rental';
     const TYPE_EXCHANGE = 'exchange';
+    const TYPE_PURCHASE = 'purchase';
 
     // Transaction statuses
     const STATUS_PENDING = 'pending';
@@ -191,6 +192,19 @@ class QuotaTransaction extends Model
     public function isRental(): bool
     {
         return $this->transaction_type === self::TYPE_RENTAL;
+    }
+
+    public function isPurchase(): bool
+    {
+        return $this->transaction_type === self::TYPE_PURCHASE;
+    }
+
+    /**
+     * Aluguel e compra compartilham fluxo com PIX, comprovante e taxa de êxito.
+     */
+    public function usesMonetaryNegotiationFlow(): bool
+    {
+        return $this->isRental() || $this->isPurchase();
     }
 
     /**

@@ -10,3 +10,5 @@ Artisan::command('inspire', function () {
 
 // Agendar verificação de negociações expiradas a cada hora
 Schedule::command('negotiations:check-expired')->hourly();
+
+Schedule::command('wishlist:process-matches')->hourly();

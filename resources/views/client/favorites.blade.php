@@ -403,7 +403,7 @@
 <div class="container">
     @php
         $hasAnyFavorites = false;
-        foreach(['rental', 'purchase', 'exchange'] as $transType) {
+        foreach(['rental', 'exchange', 'purchase'] as $transType) {
             if ($favoriteLists->has($transType)) {
                 foreach(['city', 'hotel', 'state'] as $listType) {
                     if ($favoriteLists->get($transType)->has($listType) && $favoriteLists->get($transType)->get($listType)->isNotEmpty()) {
@@ -430,8 +430,8 @@
         @php
             $transactionTypes = [
                 'rental' => ['title' => 'Alugar', 'icon' => 'fa-calendar-check', 'color' => 'primary'],
+                'exchange' => ['title' => 'Troca', 'icon' => 'fa-exchange-alt', 'color' => 'info'],
                 'purchase' => ['title' => 'Comprar', 'icon' => 'fa-shopping-cart', 'color' => 'success'],
-                'exchange' => ['title' => 'Troca', 'icon' => 'fa-exchange-alt', 'color' => 'info']
             ];
             $listTypes = [
                 'state' => ['title' => 'Por Estado', 'icon' => 'fa-map', 'color' => 'info'],

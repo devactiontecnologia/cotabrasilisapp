@@ -378,16 +378,13 @@ class QuotaController extends Controller
         $user = Auth::user();
         $profile = $user->profile;
         
-        $query = Quota::where('status', Quota::STATUS_AVAILABLE)
+        $query = Quota::listedInMarketplaceSearch()
             ->with(['user', 'hotel']);
 
-        // Telas exclusivas de refine: troca usa oferta ativa; compra usa action=sell no fracionamento.
         $exchangeRefine = $request->boolean('exchange_refine');
-        $purchaseRefine = $request->boolean('purchase_refine');
+        $isPurchaseSearch = in_array($request->input('transaction_type'), ['purchase', 'buy'], true);
         if ($exchangeRefine) {
             $request->merge(['transaction_type' => 'exchange']);
-        } elseif ($purchaseRefine) {
-            $request->merge(['transaction_type' => 'purchase']);
         }
 
         // Verificar se há algum filtro aplicado (transaction_type não conta como filtro)
@@ -448,9 +445,12 @@ class QuotaController extends Controller
             // Evita depender de LIKE em JSON serializado, que pode variar por formato.
             $query->where('is_fractioned', true)
                 ->whereHasActiveExchangeListing();
-        } elseif ($purchaseRefine) {
-            $query->whereFractionPeriodAction('sell')
-                ->whereHasActiveSaleListing();
+        } elseif ($isPurchaseSearch) {
+            $query->whereHasActiveSaleListing()
+                ->where(function ($q) {
+                    $q->whereFractionPeriodAction('sell')
+                        ->orWhereJsonContains('allowed_uses', 'sell');
+                });
         }
 
         // Apply filters - todos funcionam individualmente e em conjunto
@@ -756,11 +756,13 @@ class QuotaController extends Controller
         }
 
         // Filtro por preço - apenas se não for troca
-        // Regra:
-        // - Se o usuário NÃO mexeu no slider (min = 0 e max = 250000), NÃO filtra por preço
-        // - Só aplica filtro quando min > 0 ou max < 250000 (teto do slider em filters.blade.php)
-        $transactionType = $request->filled('transaction_type') ? $request->transaction_type : 'rent';
-        if ($transactionType !== 'exchange') {
+        $priceTx = $request->filled('transaction_type') ? (string) $request->transaction_type : 'rent';
+        if ($priceTx === 'rental') {
+            $priceTx = 'rent';
+        }
+        $isSalePriceTx = in_array($priceTx, ['purchase', 'buy', 'sell'], true);
+
+        if ($priceTx !== 'exchange') {
             $priceMin = $request->input('price_min');
             $priceMax = $request->input('price_max');
 
@@ -768,26 +770,44 @@ class QuotaController extends Controller
             $hasCustomMax = $priceMax !== null && $priceMax !== '' && (float) $priceMax < 250000;
 
             if ($hasCustomMin || $hasCustomMax) {
-                // Preço na cota OU em oferta de aluguel ativa (listagem pública)
-                $query->where(function ($wq) use ($hasCustomMin, $hasCustomMax, $priceMin, $priceMax) {
-                    $wq->where(function ($q) use ($hasCustomMin, $hasCustomMax, $priceMin, $priceMax) {
-                        $q->whereNotNull('rental_price');
-                        if ($hasCustomMin) {
-                            $q->where('rental_price', '>=', (float) $priceMin);
-                        }
-                        if ($hasCustomMax) {
-                            $q->where('rental_price', '<=', (float) $priceMax);
-                        }
-                    })->orWhereHas('rentalOffers', function ($q) use ($hasCustomMin, $hasCustomMax, $priceMin, $priceMax) {
-                        $q->where('status', 'active')->whereNull('negotiated_at');
-                        if ($hasCustomMin) {
-                            $q->where('price', '>=', (float) $priceMin);
-                        }
-                        if ($hasCustomMax) {
-                            $q->where('price', '<=', (float) $priceMax);
-                        }
+                if ($isSalePriceTx) {
+                    $query->whereHas('saleOffers', function ($q) use ($hasCustomMin, $hasCustomMax, $priceMin, $priceMax) {
+                        $q->whereNotIn('status', ['cancelled', 'sold'])
+                            ->where(function ($pq) use ($hasCustomMin, $hasCustomMax, $priceMin, $priceMax) {
+                                foreach (['desired_price', 'acceptable_price', 'minimum_price'] as $field) {
+                                    $pq->orWhere(function ($fq) use ($field, $hasCustomMin, $hasCustomMax, $priceMin, $priceMax) {
+                                        $fq->whereNotNull($field);
+                                        if ($hasCustomMin) {
+                                            $fq->where($field, '>=', (float) $priceMin);
+                                        }
+                                        if ($hasCustomMax) {
+                                            $fq->where($field, '<=', (float) $priceMax);
+                                        }
+                                    });
+                                }
+                            });
                     });
-                });
+                } else {
+                    $query->where(function ($wq) use ($hasCustomMin, $hasCustomMax, $priceMin, $priceMax) {
+                        $wq->where(function ($q) use ($hasCustomMin, $hasCustomMax, $priceMin, $priceMax) {
+                            $q->whereNotNull('rental_price');
+                            if ($hasCustomMin) {
+                                $q->where('rental_price', '>=', (float) $priceMin);
+                            }
+                            if ($hasCustomMax) {
+                                $q->where('rental_price', '<=', (float) $priceMax);
+                            }
+                        })->orWhereHas('rentalOffers', function ($q) use ($hasCustomMin, $hasCustomMax, $priceMin, $priceMax) {
+                            $q->where('status', 'active')->whereNull('negotiated_at');
+                            if ($hasCustomMin) {
+                                $q->where('price', '>=', (float) $priceMin);
+                            }
+                            if ($hasCustomMax) {
+                                $q->where('price', '<=', (float) $priceMax);
+                            }
+                        });
+                    });
+                }
             }
         }
         
@@ -880,12 +900,17 @@ class QuotaController extends Controller
                     $q->whereJsonContains('allowed_uses', 'sell')
                       ->where('is_fractioned', false);
                 });
-            } elseif ($transactionType === 'buy') {
-                // Comprar: cotas inteiras para compra
-                // Cotas que têm 'buy' no allowed_uses E não são fracionadas
-                $query->where(function($q) {
-                    $q->whereJsonContains('allowed_uses', 'buy')
-                      ->where('is_fractioned', false);
+            } elseif (in_array($transactionType, ['purchase', 'buy'], true)) {
+                // Compra: cotas à venda (sell) — reforço; bloco isPurchaseSearch já restringe oferta ativa
+                $query->where(function ($q) {
+                    $q->whereJsonContains('allowed_uses', 'sell')
+                        ->orWhere(function ($fq) {
+                            $fq->whereNotNull('fraction_details')
+                                ->where(function ($sq) {
+                                    $sq->where('fraction_details', 'like', '%"action":"sell"%')
+                                        ->orWhere('fraction_details', 'like', '%"action": "sell"%');
+                                });
+                        });
                 });
             }
         } elseif ($hasAnyFilter) {
@@ -1136,9 +1161,12 @@ class QuotaController extends Controller
         }
         $hotelInoperant = $hotel ? !$hotel->is_functioning : false;
         
-        // Get transaction type from request (rent, exchange, buy)
+        // Get transaction type from request (rent, exchange, buy / purchase)
         $transactionType = $request->input('transaction_type', 'rent');
-        
+        if ($transactionType === 'purchase') {
+            $transactionType = 'buy';
+        }
+
         return view('quotas.show', compact('quota', 'profile', 'hotelInoperant', 'hotel', 'hotelFirstImage', 'transactionType'));
     }
 

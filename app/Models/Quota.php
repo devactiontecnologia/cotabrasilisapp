@@ -189,6 +189,27 @@ class Quota extends Model
         });
     }
 
+    /**
+     * Cotas que podem aparecer na busca pública (aluguel/compra/troca).
+     * Exclui negociação em andamento mesmo se status da cota ainda estiver "available" por inconsistência.
+     */
+    public function scopeListedInMarketplaceSearch(Builder $query): Builder
+    {
+        $terminalTxStatuses = [
+            \App\Models\QuotaTransaction::STATUS_COMPLETED,
+            \App\Models\QuotaTransaction::STATUS_CANCELLED,
+            \App\Models\QuotaTransaction::STATUS_EXPIRED,
+        ];
+
+        return $query->where('status', self::STATUS_AVAILABLE)
+            ->where(function (Builder $q) use ($terminalTxStatuses) {
+                $q->whereNull('current_transaction_id')
+                    ->orWhereHas('currentTransaction', function (Builder $t) use ($terminalTxStatuses) {
+                        $t->whereIn('status', $terminalTxStatuses);
+                    });
+            });
+    }
+
     public function scopeWhereFractionPeriodAction(Builder $query, string $action): Builder
     {
         $action = trim($action);

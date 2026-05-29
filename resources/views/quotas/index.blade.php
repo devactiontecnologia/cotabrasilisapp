@@ -64,9 +64,9 @@
                         @if(request('exchange_refine'))
                             <h4 class="fw-semibold mb-1">Refine sua busca por Cotas ou Frações para Troca</h4>
                             <p class="text-muted mb-0">Aplique um ou mais filtros para encontrá-las com agilidade e precisão.</p>
-                        @elseif(request('purchase_refine'))
+                        @elseif(in_array(request('transaction_type'), ['purchase', 'buy'], true))
                             <h4 class="fw-semibold mb-1">Refine sua busca por Cotas ou Frações para Compra</h4>
-                            <p class="text-muted mb-0">Aplique filtros para encontrar somente cotas ou frações liberadas para <strong>compra</strong>.</p>
+                            <p class="text-muted mb-0">Aplique um ou mais filtros para encontrá-las com agilidade e precisão.</p>
                         @else
                             <h4 class="fw-semibold mb-1">Refine sua busca por Cotas ou frações</h4>
                             <p class="text-muted mb-0">Aplique filtros combinados para encontrar a cota ou fração ideal para alugar com rapidez.</p>
@@ -100,9 +100,6 @@
                     @endif
                     @if(request('exchange_refine'))
                         <input type="hidden" name="exchange_refine" value="1">
-                    @endif
-                    @if(request('purchase_refine'))
-                        <input type="hidden" name="purchase_refine" value="1">
                     @endif
                     @include('quotas.partials.filters')
                 </form>
@@ -164,12 +161,6 @@
                                         </div>
                                     <div class="d-flex align-items-center gap-2">
                                         @auth
-                                            <form method="POST" action="{{ route('client.wishlist.toggle', $quota) }}">
-                                                @csrf
-                                                <button type="submit" class="btn btn-sm {{ $wishlistIds->contains($quota->id) ? 'btn-warning text-white' : 'btn-outline-warning' }}" title="{{ $wishlistIds->contains($quota->id) ? 'Remover dos desejados' : 'Adicionar aos desejados' }}">
-                                                    <i class="{{ $wishlistIds->contains($quota->id) ? 'fas' : 'far' }} fa-star"></i>
-                                                </button>
-                                            </form>
                                             @php
                                                 // Determinar transaction_type baseado na rota ou request
                                                 $transactionType = request('transaction_type', 'rental');
@@ -185,7 +176,15 @@
                                                 elseif (request()->routeIs('exchanges.*')) {
                                                     $transactionType = 'exchange';
                                                 }
+                                                $transactionType = in_array($transactionType, ['buy', 'purchase'], true) ? 'purchase' : (in_array($transactionType, ['rent', 'rental'], true) ? 'rental' : $transactionType);
                                             @endphp
+                                            <form method="POST" action="{{ route('client.wishlist.toggle', $quota) }}">
+                                                @csrf
+                                                <input type="hidden" name="transaction_type" value="{{ $transactionType }}">
+                                                <button type="submit" class="btn btn-sm {{ $wishlistIds->contains($quota->id) ? 'btn-warning text-white' : 'btn-outline-warning' }}" title="{{ $wishlistIds->contains($quota->id) ? 'Remover dos desejados' : 'Adicionar aos desejados' }}">
+                                                    <i class="{{ $wishlistIds->contains($quota->id) ? 'fas' : 'far' }} fa-star"></i>
+                                                </button>
+                                            </form>
                                             @if($favoriteIds->contains($quota->id))
                                                 <form method="POST" action="{{ route('client.favorites.toggle', $quota) }}" class="d-inline">
                                                     @csrf
@@ -310,9 +309,9 @@
 
                             <div class="card-footer bg-white border-0 pt-0 pb-4 px-4">
                                 <div class="d-flex flex-column gap-2">
-                                    <a href="{{ route('quotas.show', array_merge([$quota], request()->only('transaction_type'))) }}" class="btn btn-success w-100">
+                                    <a href="{{ route('quotas.show', array_merge([$quota], request()->only('transaction_type', 'hide_buttons'))) }}" class="btn btn-success w-100">
                                         <i class="fas fa-eye me-2"></i>Ver detalhes completos
-                                        </a>
+                                    </a>
                                     </div>
                                 </div>
                             </div>
@@ -336,6 +335,15 @@
                     @auth
                         <form method="POST" action="{{ route('client.wishlist.save') }}" class="d-inline">
                             @csrf
+                            @php
+                                $wlTx = request('transaction_type', 'rental');
+                                if (in_array($wlTx, ['buy', 'purchase'], true)) {
+                                    $wlTx = 'purchase';
+                                } elseif (in_array($wlTx, ['rent', 'rental'], true)) {
+                                    $wlTx = 'rental';
+                                }
+                            @endphp
+                            <input type="hidden" name="transaction_type" value="{{ $wlTx }}">
                             <input type="hidden" name="hotel_name" value="{{ request('hotel_name') }}">
                             <input type="hidden" name="city" value="{{ request('city') }}">
                             <input type="hidden" name="state" value="{{ request('state') }}">
@@ -395,13 +403,13 @@
 @push('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        @if(request('exchange_refine') || request('purchase_refine'))
+        @if(request('exchange_refine'))
         // Nas telas de refine, evita múltiplos cliques em "Buscar" e "Limpar filtros".
         function mountRefineLoading() {
             const form = document.querySelector('form[action="{{ route('quotas.index') }}"]');
             const submitBtn = document.querySelector('.js-refine-submit');
             const clearBtn = document.querySelector('.js-refine-clear');
-            const searchLabel = @json(request('purchase_refine') ? 'Buscando cotas e frações para compra...' : 'Buscando cotas e frações para troca...');
+            const searchLabel = @json('Buscando cotas e frações para troca...');
             let busy = false;
 
             const showLoading = function(label) {

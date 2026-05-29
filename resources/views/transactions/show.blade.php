@@ -13,6 +13,8 @@
     use Illuminate\Support\Str;
 
     $isRental = $transaction->transaction_type === 'rental';
+    $isPurchase = $transaction->transaction_type === \App\Models\QuotaTransaction::TYPE_PURCHASE;
+    $isMonetaryFlow = $isRental || $isPurchase;
     $startDate = $transaction->quota->start_date ? Carbon::parse($transaction->quota->start_date) : null;
     $endDate = $transaction->quota->end_date ? Carbon::parse($transaction->quota->end_date) : null;
     $durationDays = ($startDate && $endDate) ? $startDate->diffInDays($endDate) + 1 : null;
@@ -81,8 +83,8 @@
                                 <span class="badge bg-success-subtle text-success rounded-3 p-3"><i class="fas fa-sync-alt"></i></span>
                                 <div>
                                     <small class="text-muted text-uppercase fw-semibold">Tipo</small>
-                                    <p class="mb-0 fw-semibold">{{ $isRental ? 'Aluguel de cota' : 'Troca de cotas' }}</p>
-                                    <span class="text-muted small">{{ $isRental ? 'Processo com pagamento e contrato digital' : 'Negociação baseada em troca de titularidade' }}</span>
+                                    <p class="mb-0 fw-semibold">{{ $isPurchase ? 'Compra de cota' : ($isRental ? 'Aluguel de cota' : 'Troca de cotas') }}</p>
+                                    <span class="text-muted small">{{ $isMonetaryFlow ? 'Processo com pagamento e contrato digital' : 'Negociação baseada em troca de titularidade' }}</span>
                                 </div>
                             </div>
                         </div>
@@ -122,7 +124,7 @@
                 </div>
             </div>
 
-            @if($isRental)
+            @if($isMonetaryFlow)
                 <div class="card shadow-sm border-0 rounded-4">
                     <div class="card-body p-4">
                         <h5 class="fw-semibold mb-4"><i class="fas fa-dollar-sign text-success me-2"></i>Fluxo financeiro</h5>
@@ -162,7 +164,7 @@
                     @if($transaction->digitalContract)
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <div>
-                                <p class="fw-semibold mb-1">{{ $isRental ? 'Contrato de aluguel' : 'Contrato de troca' }}</p>
+                                <p class="fw-semibold mb-1">{{ $isPurchase ? 'Contrato de compra' : ($isRental ? 'Contrato de aluguel' : 'Contrato de troca') }}</p>
                                 <span class="badge bg-{{ $transaction->digitalContract->is_signed ? 'success' : 'warning' }} fw-semibold">
                                     <i class="fas fa-{{ $transaction->digitalContract->is_signed ? 'check' : 'clock' }} me-1"></i>
                                     {{ $transaction->digitalContract->is_signed ? 'Assinado por ambas as partes' : 'Assinatura pendente' }}
@@ -216,7 +218,7 @@
                                 <i class="fas fa-user"></i>
                             </span>
                             <div>
-                                <small class="text-muted text-uppercase fw-semibold">{{ $isRental ? 'Locatário' : 'Interessado' }}</small>
+                                <small class="text-muted text-uppercase fw-semibold">{{ $isPurchase ? 'Comprador' : ($isRental ? 'Locatário' : 'Interessado') }}</small>
                                 <p class="mb-0 fw-semibold">{{ $transaction->renter->name }}</p>
                                 <span class="text-muted small">{{ $transaction->renter->email }}</span>
                             </div>
@@ -224,12 +226,12 @@
                     </div>
                     <div class="alert alert-info mt-4 mb-0">
                         <i class="fas fa-info-circle me-2"></i>
-                        Você está visualizando esta transação como <strong>{{ $transaction->owner_id == auth()->id() ? 'proprietário' : ($isRental ? 'locatário' : 'participante da troca') }}</strong>.
+                        Você está visualizando esta transação como <strong>{{ $transaction->owner_id == auth()->id() ? 'proprietário' : ($isPurchase ? 'comprador' : ($isRental ? 'locatário' : 'participante da troca')) }}</strong>.
                     </div>
                 </div>
             </div>
 
-            @if($isRental)
+            @if($isMonetaryFlow)
                 <div class="card shadow-sm border-0 rounded-4">
                     <div class="card-body p-4">
                         <h5 class="fw-semibold mb-3"><i class="fas fa-credit-card text-success me-2"></i>Status do pagamento</h5>

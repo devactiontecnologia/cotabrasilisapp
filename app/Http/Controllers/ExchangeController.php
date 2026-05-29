@@ -461,6 +461,9 @@ class ExchangeController extends Controller
         // Definir validade baseada no tipo de perfil
         $exchangeOffer->setValidityByProfileType($profile->profile_type);
 
+        app(\App\Services\WishlistMatchingService::class)
+            ->processNewPublishedListing($quota, 'exchange');
+
         // Enviar email de notificação
         try {
             $emailService = new EmailService();

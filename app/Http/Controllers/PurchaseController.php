@@ -35,13 +35,18 @@ class PurchaseController extends Controller
         return view('purchases.index', compact('purchases'));
     }
 
-    public function refine(Request $request)
+    public function request(Request $request)
     {
         return redirect()->route('quotas.index', array_merge($request->all(), [
             'transaction_type' => 'purchase',
-            'purchase_refine' => 1,
-            'search' => $request->input('search', 1),
+            'hide_buttons' => true,
         ]));
+    }
+
+    /** @deprecated Use purchases.request */
+    public function refine(Request $request)
+    {
+        return $this->request($request);
     }
 
     public function create()

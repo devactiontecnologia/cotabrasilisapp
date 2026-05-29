@@ -196,6 +196,11 @@ class SaleController extends Controller
             'negotiation_status' => $negotiationStatus,
         ]);
 
+        if ($saleOffer->quota) {
+            app(\App\Services\WishlistMatchingService::class)
+                ->processNewPublishedListing($saleOffer->quota, 'purchase');
+        }
+
         // Se for negociação com admin, notificar admin
         if ($negotiationStatus === 'admin') {
             $admin = User::where('is_admin', true)->first();

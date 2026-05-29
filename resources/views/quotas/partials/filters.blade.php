@@ -342,8 +342,9 @@
         <a
             href="{{ route('quotas.index', array_filter([
                 'transaction_type' => request('transaction_type', 'rent'),
+                'hide_buttons' => request('hide_buttons') ? 1 : null,
                 'exchange_refine' => request('exchange_refine') ? 1 : null,
-                'purchase_refine' => request('purchase_refine') ? 1 : null,
+                'search' => (request('hide_buttons') || request('exchange_refine') || in_array(request('transaction_type'), ['purchase', 'buy'], true)) ? 1 : null,
             ], fn ($v) => $v !== null && $v !== '')) }}"
             class="btn btn-outline-secondary px-4 py-2 js-refine-clear"
         >

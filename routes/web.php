@@ -228,6 +228,7 @@ Route::middleware(['auth', 'valid.registration'])->group(function () {
 
         // Purchase routes (Comprar)
         Route::get('/purchases', [PurchaseController::class, 'index'])->name('purchases.index');
+        Route::get('/purchases/request', [PurchaseController::class, 'request'])->name('purchases.request');
         Route::get('/purchases/refine', [PurchaseController::class, 'refine'])->name('purchases.refine');
         Route::get('/purchases/create', [PurchaseController::class, 'create'])->name('purchases.create');
         Route::post('/purchases', [PurchaseController::class, 'store'])->name('purchases.store');

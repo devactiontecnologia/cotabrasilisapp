@@ -217,5 +217,104 @@ class NotificationService
             return 0;
         }
     }
+
+    /**
+     * Dono de cota com semana compatível, sem oferta publicada: convite para publicar (match).
+     */
+    public function notifyOwnerToPublishForWishlistMatch(
+        User $owner,
+        $quota,
+        string $transactionType,
+        int $interestedCount,
+        $wishlistSearch,
+        string $publishUrl
+    ): bool {
+        $txLabel = match ($transactionType) {
+            'exchange' => 'troca',
+            'purchase' => 'venda',
+            default => 'aluguel',
+        };
+
+        $period = '';
+        if ($wishlistSearch->start_date && $wishlistSearch->end_date) {
+            $period = ' (período '.$wishlistSearch->start_date->format('d/m/Y').' a '.$wishlistSearch->end_date->format('d/m/Y').')';
+        }
+
+        $subject = 'Há interessados na sua semana — publique sua oferta';
+        $message = "Olá, {$owner->name}!\n\n"
+            ."Identificamos {$interestedCount} pessoa(s) buscando {$txLabel} em {$quota->hotel_name}{$period}, "
+            ."com critérios compatíveis com a sua cota, mas você ainda não publicou uma oferta de {$txLabel}.\n\n"
+            ."Deseja publicar agora para dar match? Acesse: {$publishUrl}\n\n"
+            .'Equipe Cota Brasilis';
+
+        Notification::create([
+            'user_id' => $owner->id,
+            'type' => 'wishlist_publish_prompt',
+            'title' => $subject,
+            'message' => $message,
+            'data' => [
+                'quota_id' => $quota->id,
+                'transaction_type' => $transactionType,
+                'wishlist_search_id' => $wishlistSearch->id,
+                'interested_count' => $interestedCount,
+                'publish_url' => $publishUrl,
+            ],
+            'channel' => 'in_app',
+            'sent' => true,
+            'sent_at' => now(),
+        ]);
+
+        return $this->sendBoth($owner, $subject, $message, [
+            'quota_id' => $quota->id,
+            'transaction_type' => $transactionType,
+        ]);
+    }
+
+    /**
+     * Interessado: já existe oferta publicada que atende à busca salva.
+     */
+    public function notifyWishlistSearcherOfferAvailable(User $user, $wishlistSearch, string $transactionType): bool
+    {
+        $txLabel = match ($transactionType) {
+            'exchange' => 'troca',
+            'purchase' => 'compra',
+            default => 'aluguel',
+        };
+
+        $subject = 'Sua busca nos Desejados encontrou ofertas';
+        $searchUrl = route('quotas.index', array_filter([
+            'search' => 1,
+            'transaction_type' => $transactionType === 'purchase' ? 'purchase' : $transactionType,
+            'hotel_name' => $wishlistSearch->hotel_name,
+            'city' => $wishlistSearch->city,
+            'state' => $wishlistSearch->state,
+            'check_in' => $wishlistSearch->start_date?->format('Y-m-d'),
+            'check_out' => $wishlistSearch->end_date?->format('Y-m-d'),
+            'people' => $wishlistSearch->number_of_guests,
+        ]));
+
+        $message = "Olá, {$user->name}!\n\n"
+            ."Há ofertas de {$txLabel} disponíveis que correspondem à busca que você salvou nos Desejados.\n\n"
+            ."Veja os resultados: {$searchUrl}\n\n"
+            .'Equipe Cota Brasilis';
+
+        Notification::create([
+            'user_id' => $user->id,
+            'type' => 'wishlist_offer_match',
+            'title' => $subject,
+            'message' => $message,
+            'data' => [
+                'wishlist_search_id' => $wishlistSearch->id,
+                'search_url' => $searchUrl,
+            ],
+            'channel' => 'in_app',
+            'sent' => true,
+            'sent_at' => now(),
+        ]);
+
+        return $this->sendBoth($user, $subject, $message, [
+            'wishlist_search_id' => $wishlistSearch->id,
+        ]);
+    }
 }
 

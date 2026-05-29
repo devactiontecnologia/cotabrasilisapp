@@ -58,8 +58,11 @@ class TransactionController extends Controller
     public function startNegotiation(Request $request, Quota $quota)
     {
         $user = Auth::user();
-        $transactionType = $request->get('type', 'rent'); // rent, buy, exchange
-        
+        $transactionType = $request->get('type', 'rent'); // rent, buy, exchange, purchase
+        if ($transactionType === 'purchase') {
+            $transactionType = 'buy';
+        }
+
         // Check if user can rent/buy
         if ($quota->user_id === $user->id) {
             return redirect()->back()
@@ -206,7 +209,12 @@ class TransactionController extends Controller
             }
         }
 
-        $totalAmount = $request->input('total_amount', $quota->rental_price ?? 0);
+        $totalAmount = (float) $request->input('total_amount', $quota->getMarketplaceListPrice('buy') ?? 0);
+        if ($totalAmount <= 0) {
+            return redirect()->back()
+                ->with('error', 'Esta cota não possui preço de venda definido para iniciar a compra.');
+        }
+
         $documentDeadlineHours = 60;
         $negotiationDeadline = now()->addHours($documentDeadlineHours);
 
@@ -216,7 +224,7 @@ class TransactionController extends Controller
             'quota_id' => $quota->id,
             'renter_id' => $user->id,
             'owner_id' => $quota->user_id,
-            'transaction_type' => 'rental',
+            'transaction_type' => QuotaTransaction::TYPE_PURCHASE,
             'total_amount' => $totalAmount,
             'owner_amount' => $totalAmount * 0.95,
             'platform_fee' => $totalAmount * 0.05,
@@ -240,13 +248,13 @@ class TransactionController extends Controller
 
         DigitalContract::create([
             'transaction_id' => $transaction->id,
-            'contract_type' => 'rental_agreement',
-            'contract_content' => $this->generateRentalContract($transaction),
+            'contract_type' => 'purchase_agreement',
+            'contract_content' => $this->generatePurchaseContract($transaction),
             'is_completed' => false,
         ]);
 
         return redirect()->route('transactions.waiting-document', $transaction)
-            ->with('success', 'Interesse registrado! Aguarde o proprietário enviar o documento em até 60 horas.');
+            ->with('success', 'Interesse na compra registrado! Aguarde o proprietário enviar o documento em até 60 horas.');
     }
 
     /**
@@ -608,14 +616,16 @@ class TransactionController extends Controller
             'document' => 'required|file|mimes:pdf,jpg,jpeg,png',
         ];
         $messages = [];
-        if ($transaction->isRental()) {
+        if ($transaction->usesMonetaryNegotiationFlow()) {
             $rules['owner_pix'] = 'required|string|max:255';
-            $messages['owner_pix.required'] = 'Informe seu PIX para receber o valor do aluguel.';
+            $messages['owner_pix.required'] = $transaction->isPurchase()
+                ? 'Informe seu PIX para receber o valor da venda.'
+                : 'Informe seu PIX para receber o valor do aluguel.';
         }
         $request->validate($rules, $messages);
         $path = $request->file('document')->store('transaction-documents', 'public');
         $transaction->update([
-            'owner_pix' => $transaction->isRental() ? trim((string) $request->input('owner_pix')) : null,
+            'owner_pix' => $transaction->usesMonetaryNegotiationFlow() ? trim((string) $request->input('owner_pix')) : null,
             'document_path' => $path,
             'document_uploaded_at' => now(),
             'workflow_step' => QuotaTransaction::WORKFLOW_DOC_AVAILABLE,
@@ -636,9 +646,11 @@ class TransactionController extends Controller
             'document' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
         ];
         $messages = [];
-        if ($transaction->isRental()) {
+        if ($transaction->usesMonetaryNegotiationFlow()) {
             $rules['payment_receipt'] = 'required|file|mimes:pdf,jpg,jpeg,png|max:5120';
-            $messages['payment_receipt.required'] = 'Anexe o comprovante de pagamento do valor do aluguel (PIX ao proprietário).';
+            $messages['payment_receipt.required'] = $transaction->isPurchase()
+                ? 'Anexe o comprovante de pagamento do valor da compra (PIX ao proprietário).'
+                : 'Anexe o comprovante de pagamento do valor do aluguel (PIX ao proprietário).';
         }
         $request->validate($rules, $messages);
         $docPath = $request->file('document')->store('transaction-documents', 'public');
@@ -1018,6 +1030,23 @@ class TransactionController extends Controller
     /**
      * Generate rental contract content.
      */
+    private function generatePurchaseContract(QuotaTransaction $transaction): string
+    {
+        return "CONTRATO DE COMPRA DE COTA HOTELEIRA\n\n" .
+               "Vendedor: {$transaction->owner->name}\n" .
+               "Comprador: {$transaction->renter->name}\n" .
+               "Hotel: {$transaction->quota->hotel_name}\n" .
+               "Localização: {$transaction->quota->location}\n" .
+               "Período: {$transaction->quota->start_date} a {$transaction->quota->end_date}\n" .
+               "Valor: R$ " . number_format($transaction->total_amount, 2, ',', '.') . "\n" .
+               "Data do Contrato: " . now()->format('d/m/Y') . "\n\n" .
+               "Termos e Condições:\n" .
+               "1. O comprador se compromete a concluir o pagamento conforme acordado.\n" .
+               "2. O vendedor se compromete a transferir os direitos de uso da cota após a confirmação.\n" .
+               "3. Qualquer alteração deve ser comunicada com antecedência.\n\n" .
+               "Este contrato é válido e vinculante para ambas as partes.";
+    }
+
     private function generateRentalContract(QuotaTransaction $transaction)
     {
         return "CONTRATO DE ALUGUEL DE COTA HOTELEIRA\n\n" .
